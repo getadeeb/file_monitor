@@ -22,12 +22,13 @@
 
 #include <sys/inotify.h>
 #include <limits.h>
+#include <unistd.h>
 /*
 	A buffer big enough to read 100 events
 	in one gos
 */
 
-#define BUFSIZE (100*(sizeof(struct inotify_event)+NAME_MAX+1));
+#define BUFSIZE (100*(sizeof(struct inotify_event)+NAME_MAX+1))
 
 int main(){
 	
@@ -37,9 +38,17 @@ int main(){
 	/*
 		inotify api descriptors
 	*/
+	
+	int i_notify_fd         = -1;
+	int watch_fd            = -1;
+	
+	/*
+		descriptor for reading the inotify 
+		interface
+	*/
+	
+	int inotify_no_of_events = -1;
 
-	int i_notify_fd = -1;
-	int watch_fd    = -1;
 
 	/*
 		Array for holding the watched file names
@@ -54,6 +63,23 @@ int main(){
 	*/
 
 	struct stat sb;
+
+	/*
+		event buffer to hold all the
+		events returned by the inotify api
+	*/
+	char event_buffer[BUFSIZE];
+
+	/*
+		event record pointer
+	*/
+
+	char *event_pointer = NULL;
+	
+	/*
+		inotify event structure
+	*/
+	struct inotify_event *one_event = NULL;
 
 	/*
 		intializing the inotify api
@@ -106,7 +132,77 @@ int main(){
 				printf("Error adding watch for %s\n",watch_name);
 			}else{
 				printf("Added %s to the watch list %d\n",watch_name,watch_fd);
+				
+				/*
+					Store the watched file 
+					descriptor on our array
+				*/
+				strcpy(watched_file_names[watch_fd],watch_name);
 			}
+		}else{
+			/*
+				probabaly this might
+				 be a directory
+			*/
+			printf("%s in not a regular file,so ignored\n",watch_name);
+		}	
+	}
+
+	/*
+		right now we have parsed all the files in the descriptor
+		to the memory area.
+		now start wrrting the output to a file
+	*/
+
+	f_out = fopen("monitor.out","a");
+	/*
+		infinite loop to continously 
+		monitor all the  events
+	*/
+		
+	while(1){
+		/*	
+			returns the no of events
+			happend on the files being watched
+		*/
+		inotify_no_of_events = read(i_notify_fd,event_buffer,BUFSIZE);
+		
+		/*
+			loop throught all of the events
+			and write it to the file buiffer
+			here event records are not
+			of fixed length so we have to iterate
+			in a special way.
+		*/
+
+		for(event_pointer = event_buffer; 
+			event_buffer < event_buffer + inotify_no_of_events;){
+			one_event = (struct inotify_event *) event_pointer;
+			
+			/*
+				if the event is modifying the 
+				file,write it to the log file
+			
+			*/
+			
+			if(one_event->mask & IN_MODIFY){
+				fprintf(f_out,"%s was modified\n",watched_file_names[one_event->wd]);
+			}
+			
+			/*
+				if the file is deleted
+			*/
+
+			if(one_event->mask & IN_DELETE_SELF){
+				fprintf(f_out,"%s was deleted\n",watched_file_names[one_event->wd]);
+			}
+			
+			/*
+				flusing the file buffer writes everything
+				to the file
+			*/
+			fflush(f_out);
+
 		}	
 	}
 
