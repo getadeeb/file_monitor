@@ -22,7 +22,6 @@
 
 #include <sys/inotify.h>
 #include <limits.h>
-
 /*
 	A buffer big enough to read 100 events
 	in one gos
@@ -51,6 +50,12 @@ int main(){
 	char watched_file_names[100][NAME_MAX+1];
 
 	/*
+		Structure for fetching the file information
+	*/
+
+	struct stat sb;
+
+	/*
 		intializing the inotify api
 	*/
 
@@ -72,10 +77,38 @@ int main(){
 	}
 
 	/*
-		read all tje watched file 
+		read all the watched file 
 		names from the config file
 	*/
 
+	while(fgets(watch_name,PATH_MAX,f_config)){
+		watch_name[strlen(watch_name)-1] = '\0';
+		
+		/*
+			check whether the file exists or 
+			can be accessed by this program
+		*/
+
+		int file_stat = stat(watch_name,&sb);
+		if(file_stat < 0){
+			printf("Cant stat %s, ignored\n",watch_name);
+			continue;
+		}
+
+		/*
+			if the file is a regular file 
+			add it to the watch list
+		*/
+
+		if(S_ISREG(sb.st_mode)){
+			watch_fd = inotify_add_watch(i_notify_fd,watch_name,IN_MODIFY | IN_DELETE_SELF);
+			if(watch_fd < 0){
+				printf("Error adding watch for %s\n",watch_name);
+			}else{
+				printf("Added %s to the watch list %d\n",watch_name,watch_fd);
+			}
+		}	
+	}
 
 	return 0;
 }
