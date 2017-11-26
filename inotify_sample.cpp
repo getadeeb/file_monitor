@@ -203,7 +203,8 @@ int main(){
 			*/
 			fflush(f_out);
 
-		}	
+		}
+		fclose(f_out);	
 	}
 
 	return 0;
